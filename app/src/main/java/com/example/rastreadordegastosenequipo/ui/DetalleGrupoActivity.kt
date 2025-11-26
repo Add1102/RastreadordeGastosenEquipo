@@ -14,6 +14,8 @@ import com.example.rastreadordegastosenequipo.R
 import com.example.rastreadordegastosenequipo.dataBase.BD
 import com.example.rastreadordegastosenequipo.dataBase.Miembro
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import android.content.Intent
+
 
 class DetalleGrupoActivity : AppCompatActivity() {
     private var idGrupo = 0
@@ -49,7 +51,14 @@ class DetalleGrupoActivity : AppCompatActivity() {
 
         // MÓDULO 2: Registro de Gastos
         findViewById<LinearLayout>(R.id.btnModuloGastos).setOnClickListener {
+            // Preparar lista de nombres
+            val listaMiembros = ArrayList(datos.map { it.nombre })
 
+            // Intent para abrir el módulo 2
+            val intent = Intent(this, AddExpenseActivity::class.java)
+            intent.putStringArrayListExtra("miembros", listaMiembros)
+
+            startActivity(intent)
         }
 
         // MÓDULO 3: Historial de Transacciones
