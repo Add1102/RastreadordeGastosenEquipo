@@ -24,6 +24,8 @@
         </activity>
 
         <activity android:name=".ui.DetalleGrupoActivity" />
+        <activity android:name=".ui.HistoricalDeTransaccionesActivity" />
+
 
     </application>
 
