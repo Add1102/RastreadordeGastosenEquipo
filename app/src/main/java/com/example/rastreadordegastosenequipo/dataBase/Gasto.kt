@@ -1,5 +1,5 @@
 package com.example.rastreadordegastosenequipo.dataBase
-
+import java.io.Serializable
 data class Gasto(
     val id: Int = 0,
     val descripcion: String,
@@ -7,4 +7,4 @@ data class Gasto(
     val fecha: Long = System.currentTimeMillis(),
     val idPagador: Int,
     val idGrupo: Int
-)
+): Serializable

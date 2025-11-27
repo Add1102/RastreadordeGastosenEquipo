@@ -11,6 +11,9 @@ import android.widget.CheckBox
 import android.widget.Toast
 import android.content.Intent
 import com.example.rastreadordegastosenequipo.R
+import com.example.rastreadordegastosenequipo.dataBase.BD
+import com.example.rastreadordegastosenequipo.dataBase.Gasto
+import com.example.rastreadordegastosenequipo.dataBase.GastosManager
 
 class AddExpenseActivity : AppCompatActivity() {
 
@@ -68,13 +71,34 @@ class AddExpenseActivity : AppCompatActivity() {
             return
         }
 
-        val resultIntent = Intent()
-        resultIntent.putExtra("monto", monto)
-        resultIntent.putExtra("descripcion", descripcion)
-        resultIntent.putExtra("pagador", pagador)
-        resultIntent.putStringArrayListExtra("dividirEntre", ArrayList(seleccionados))
+        //  Guardar en base de datos
+        try {
+            val dbHelper = BD(this)
+            val database = dbHelper.writableDatabase
+            val gastosManager = GastosManager(database)
 
-        setResult(RESULT_OK, resultIntent)
-        finish()
+            // TEMPORAL: Usar grupoId = 1 por defecto (luego vendrá del Módulo 1)
+            val grupoId = 1
+
+            // TEMPORAL: Convertir nombre a ID (luego vendrá del Módulo 1)
+            val idPagado = miembros.indexOf(pagador) + 1
+
+            val nuevoGasto = Gasto(
+                descripcion = descripcion,
+                monto = monto,
+                idPagador = idPagado,
+                idGrupo = grupoId,
+                fecha = System.currentTimeMillis()
+            )
+
+            // Guardar en base de datos
+            gastosManager.guardarGasto(nuevoGasto)
+
+            Toast.makeText(this, "Gasto guardado correctamente", Toast.LENGTH_SHORT).show()
+            finish()
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }
