@@ -25,9 +25,8 @@
 
         <activity android:name=".ui.DetalleGrupoActivity" />
         <activity android:name=".ui.AddExpenseActivity" />
-        <activity android:name=".ui.HistoricalDeTransaccionesActivity" />
+        <activity android:name=".ui.HistoricalDeTransaccionesActivity" /> <activity android:name=".ui.SaldosActivity" />
         <activity android:name=".ui.DetallesGastoActivity" />
-
     </application>
 
 </manifest>

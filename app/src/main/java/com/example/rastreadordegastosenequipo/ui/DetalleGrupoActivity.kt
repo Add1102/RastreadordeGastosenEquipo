@@ -51,13 +51,13 @@ class DetalleGrupoActivity : AppCompatActivity() {
 
         // MÓDULO 2: Registro de Gastos
         findViewById<LinearLayout>(R.id.btnModuloGastos).setOnClickListener {
-            // Preparar lista de nombres
             val listaMiembros = ArrayList(datos.map { it.nombre })
-
-            // Intent para abrir el módulo 2
             val intent = Intent(this, AddExpenseActivity::class.java)
             intent.putStringArrayListExtra("miembros", listaMiembros)
             intent.putExtra("GRUPO_ID", idGrupo) // esto era lo que faltaba
+
+            // AGREGA ESTA LÍNEA OBLIGATORIAMENTE:
+            intent.putExtra("idGrupo", idGrupo)
 
             startActivity(intent)
         }
@@ -77,9 +77,10 @@ class DetalleGrupoActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // MÓDULO 4: Cálculo de Saldos
         findViewById<LinearLayout>(R.id.btnModuloSaldos).setOnClickListener {
-
+            val intent = Intent(this, SaldosActivity::class.java)
+            intent.putExtra("ID_GRUPO", idGrupo)
+            startActivity(intent)
         }
 
         // MÓDULO 5: Liquidación (Pagar Deudas)
