@@ -57,6 +57,7 @@ class DetalleGrupoActivity : AppCompatActivity() {
             // Intent para abrir el módulo 2
             val intent = Intent(this, AddExpenseActivity::class.java)
             intent.putStringArrayListExtra("miembros", listaMiembros)
+            intent.putExtra("GRUPO_ID", idGrupo) // esto era lo que faltaba
 
             startActivity(intent)
         }

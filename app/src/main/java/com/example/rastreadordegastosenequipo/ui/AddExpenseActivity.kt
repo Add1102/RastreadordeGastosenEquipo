@@ -24,6 +24,7 @@ class AddExpenseActivity : AppCompatActivity() {
     private lateinit var btnGuardar: Button
 
     private lateinit var miembros: List<String>
+    private var grupoId: Int = -1  // nueva variable
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,8 +36,9 @@ class AddExpenseActivity : AppCompatActivity() {
         containerMiembros = findViewById(R.id.containerMiembros)
         btnGuardar = findViewById(R.id.btnGuardar)
 
-        // Recibir lista de miembros desde el módulo 1
+        // Recibir lista de miembros Y el grupoId
         miembros = intent.getStringArrayListExtra("miembros") ?: listOf()
+        grupoId = intent.getIntExtra("GRUPO_ID", -1)  // ← Recibir el grupoId
 
         // Llenar spinner con pagadores
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, miembros)
@@ -71,23 +73,20 @@ class AddExpenseActivity : AppCompatActivity() {
             return
         }
 
-        //  Guardar en base de datos
+        // Guardar en base de datos
         try {
             val dbHelper = BD(this)
             val database = dbHelper.writableDatabase
             val gastosManager = GastosManager(database)
 
-            // TEMPORAL: Usar grupoId = 1 por defecto (luego vendrá del Módulo 1)
-            val grupoId = 1
-
-            // TEMPORAL: Convertir nombre a ID (luego vendrá del Módulo 1)
-            val idPagado = miembros.indexOf(pagador) + 1
+            // Convertir nombre a ID (usar índice + 1 como ID temporal)
+            val idPagador = miembros.indexOf(pagador) + 1
 
             val nuevoGasto = Gasto(
                 descripcion = descripcion,
                 monto = monto,
-                idPagador = idPagado,
-                idGrupo = grupoId,
+                idPagador = idPagador,
+                idGrupo = if (grupoId == -1) 1 else grupoId,  // ← Usar grupoId real o 1 como fallback
                 fecha = System.currentTimeMillis()
             )
 
