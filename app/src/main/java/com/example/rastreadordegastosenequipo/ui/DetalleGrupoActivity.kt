@@ -63,7 +63,17 @@ class DetalleGrupoActivity : AppCompatActivity() {
 
         // MÓDULO 3: Historial de Transacciones
         findViewById<LinearLayout>(R.id.btnModuloHistorial).setOnClickListener {
+            // Verificar que hay miembros en el grupo
+            if (datos.isEmpty()) {
+                Toast.makeText(this, "Primero agrega miembros al grupo", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
+            // Intent para abrir el módulo 3 - Historial de Transacciones
+            val intent = Intent(this, HistoricalDeTransaccionesActivity::class.java)
+            intent.putExtra("GRUPO_ID", idGrupo.toLong())
+            intent.putExtra("NOMBRE_GRUPO", findViewById<TextView>(R.id.tvTituloDetalle).text.toString())
+            startActivity(intent)
         }
 
         // MÓDULO 4: Cálculo de Saldos
