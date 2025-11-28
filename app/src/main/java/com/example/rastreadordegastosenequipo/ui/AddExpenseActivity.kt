@@ -1,19 +1,11 @@
 package com.example.rastreadordegastosenequipo.ui
 
-import androidx.appcompat.app.AppCompatActivity
+import android.content.ContentValues
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.Spinner
-import android.widget.ArrayAdapter
-import android.widget.LinearLayout
-import android.widget.CheckBox
-import android.widget.Toast
-import android.content.Intent
+import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
 import com.example.rastreadordegastosenequipo.R
 import com.example.rastreadordegastosenequipo.dataBase.BD
-import com.example.rastreadordegastosenequipo.dataBase.Gasto
-import com.example.rastreadordegastosenequipo.dataBase.GastosManager
 
 class AddExpenseActivity : AppCompatActivity() {
 
@@ -23,8 +15,8 @@ class AddExpenseActivity : AppCompatActivity() {
     private lateinit var containerMiembros: LinearLayout
     private lateinit var btnGuardar: Button
 
-    private lateinit var miembros: List<String>
-    private var grupoId: Int = -1  // nueva variable
+    private var idGrupo: Int = 0
+    private lateinit var miembrosNombres: List<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,68 +28,115 @@ class AddExpenseActivity : AppCompatActivity() {
         containerMiembros = findViewById(R.id.containerMiembros)
         btnGuardar = findViewById(R.id.btnGuardar)
 
-        // Recibir lista de miembros Y el grupoId
-        miembros = intent.getStringArrayListExtra("miembros") ?: listOf()
-        grupoId = intent.getIntExtra("GRUPO_ID", -1)  // ← Recibir el grupoId
+        // 1. Recibir datos correctamente
+        miembrosNombres = intent.getStringArrayListExtra("miembros") ?: listOf()
 
-        // Llenar spinner con pagadores
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, miembros)
+        // RECIBIMOS EL ID DEL GRUPO (Puede venir como "idGrupo" o "GRUPO_ID" dependiendo de tu versión anterior)
+        // Probamos ambas llaves por seguridad
+        idGrupo = intent.getIntExtra("idGrupo", -1)
+        if (idGrupo == -1) {
+            idGrupo = intent.getIntExtra("GRUPO_ID", -1)
+        }
+
+        // Configurar Spinner
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, miembrosNombres)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spPagador.adapter = adapter
 
-        // Crear checkboxes dinámicamente
-        for (m in miembros) {
+        // Checkboxes dinámicos (Marcados por defecto)
+        for (m in miembrosNombres) {
             val check = CheckBox(this)
             check.text = m
+            check.isChecked = true
             containerMiembros.addView(check)
         }
 
         btnGuardar.setOnClickListener {
-            guardarGasto()
+            guardarGastoEnBD()
         }
     }
 
-    private fun guardarGasto() {
-        val monto = etMonto.text.toString().toDoubleOrNull()
+    private fun guardarGastoEnBD() {
+        val montoTotal = etMonto.text.toString().toDoubleOrNull()
         val descripcion = etDescripcion.text.toString()
-        val pagador = spPagador.selectedItem.toString()
+        val nombrePagador = spPagador.selectedItem.toString()
 
-        val seleccionados = mutableListOf<String>()
-        for (i in 0 until containerMiembros.childCount) {
-            val cb = containerMiembros.getChildAt(i) as CheckBox
-            if (cb.isChecked) seleccionados.add(cb.text.toString())
+        // Validaciones básicas
+        if (montoTotal == null || montoTotal <= 0) {
+            Toast.makeText(this, "Ingresa un monto válido", Toast.LENGTH_SHORT).show()
+            return
         }
-
-        if (monto == null || descripcion.isEmpty() || seleccionados.isEmpty()) {
-            Toast.makeText(this, "Completa todos los campos", Toast.LENGTH_SHORT).show()
+        if (descripcion.isEmpty()) {
+            Toast.makeText(this, "Ingresa una descripción", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (idGrupo == -1) {
+            Toast.makeText(this, "Error: No se identificó el grupo", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Guardar en base de datos
-        try {
-            val dbHelper = BD(this)
-            val database = dbHelper.writableDatabase
-            val gastosManager = GastosManager(database)
-
-            // Convertir nombre a ID (usar índice + 1 como ID temporal)
-            val idPagador = miembros.indexOf(pagador) + 1
-
-            val nuevoGasto = Gasto(
-                descripcion = descripcion,
-                monto = monto,
-                idPagador = idPagador,
-                idGrupo = if (grupoId == -1) 1 else grupoId,  // ← Usar grupoId real o 1 como fallback
-                fecha = System.currentTimeMillis()
-            )
-
-            // Guardar en base de datos
-            gastosManager.guardarGasto(nuevoGasto)
-
-            Toast.makeText(this, "Gasto guardado correctamente", Toast.LENGTH_SHORT).show()
-            finish()
-
-        } catch (e: Exception) {
-            Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
+        // Obtener quiénes comparten el gasto (Checkboxes seleccionados)
+        val deudoresNombres = mutableListOf<String>()
+        for (i in 0 until containerMiembros.childCount) {
+            val v = containerMiembros.getChildAt(i)
+            if (v is CheckBox && v.isChecked) {
+                deudoresNombres.add(v.text.toString())
+            }
         }
+
+        if (deudoresNombres.isEmpty()) {
+            Toast.makeText(this, "Selecciona al menos un miembro para dividir", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val db = BD(this).writableDatabase
+
+        // --- CORRECCIÓN 1: Obtener ID real del Pagador ---
+        val idPagador = obtenerIdMiembro(db, nombrePagador)
+        if (idPagador == -1) {
+            Toast.makeText(this, "Error al encontrar al pagador en BD", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 2. Insertar Gasto Principal (La cabecera)
+        val valuesGasto = ContentValues().apply {
+            put("descripcion", descripcion)
+            put("monto", montoTotal)
+            put("fecha", System.currentTimeMillis())
+            put("id_pagador", idPagador)
+            put("id_grupo", idGrupo)
+        }
+        val idGasto = db.insert("gastos", null, valuesGasto)
+
+        // --- CORRECCIÓN 2: Insertar el Detalle (La división de la deuda) ---
+        // Esto es lo que faltaba y por eso salía "0" en saldos
+        val montoPorPersona = montoTotal / deudoresNombres.size
+
+        for (nombreDeudor in deudoresNombres) {
+            val idDeudor = obtenerIdMiembro(db, nombreDeudor)
+
+            val valuesDetalle = ContentValues().apply {
+                put("id_gasto", idGasto.toInt()) // Vinculamos con el gasto creado arriba
+                put("id_deudor", idDeudor)
+                put("monto_deuda", montoPorPersona)
+            }
+            db.insert("gasto_detalle", null, valuesDetalle)
+        }
+
+        db.close()
+        Toast.makeText(this, "Gasto guardado y dividido correctamente", Toast.LENGTH_SHORT).show()
+        finish()
+    }
+
+    // Función auxiliar para buscar el ID real en la BD usando el nombre y el grupo
+    private fun obtenerIdMiembro(db: android.database.sqlite.SQLiteDatabase, nombre: String): Int {
+        var id = -1
+        // Buscamos el miembro que tenga ese nombre Y pertenezca a este grupo
+        val cursor = db.rawQuery("SELECT id FROM miembros WHERE nombre = ? AND id_grupo = ?", arrayOf(nombre, idGrupo.toString()))
+        if (cursor.moveToFirst()) {
+            id = cursor.getInt(0)
+        }
+        cursor.close()
+        return id
     }
 }
