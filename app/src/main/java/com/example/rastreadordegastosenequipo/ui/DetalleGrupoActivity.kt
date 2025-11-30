@@ -15,6 +15,7 @@ import com.example.rastreadordegastosenequipo.dataBase.BD
 import com.example.rastreadordegastosenequipo.dataBase.Miembro
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import android.content.Intent
+import com.example.rastreadordegastosenequipo.ui.SettlementActivity // ¡Importación correcta!
 
 
 class DetalleGrupoActivity : AppCompatActivity() {
@@ -49,28 +50,23 @@ class DetalleGrupoActivity : AppCompatActivity() {
         }
 
 
-        // MÓDULO 2: Registro de Gastos
+
         findViewById<LinearLayout>(R.id.btnModuloGastos).setOnClickListener {
             val listaMiembros = ArrayList(datos.map { it.nombre })
             val intent = Intent(this, AddExpenseActivity::class.java)
             intent.putStringArrayListExtra("miembros", listaMiembros)
-            intent.putExtra("GRUPO_ID", idGrupo) // esto era lo que faltaba
-
-            // AGREGA ESTA LÍNEA OBLIGATORIAMENTE:
+            intent.putExtra("GRUPO_ID", idGrupo)
             intent.putExtra("idGrupo", idGrupo)
-
             startActivity(intent)
         }
 
-        // MÓDULO 3: Historial de Transacciones
+        
         findViewById<LinearLayout>(R.id.btnModuloHistorial).setOnClickListener {
-            // Verificar que hay miembros en el grupo
             if (datos.isEmpty()) {
                 Toast.makeText(this, "Primero agrega miembros al grupo", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Intent para abrir el módulo 3 - Historial de Transacciones
             val intent = Intent(this, HistoricalDeTransaccionesActivity::class.java)
             intent.putExtra("GRUPO_ID", idGrupo.toLong())
             intent.putExtra("NOMBRE_GRUPO", findViewById<TextView>(R.id.tvTituloDetalle).text.toString())
@@ -85,7 +81,19 @@ class DetalleGrupoActivity : AppCompatActivity() {
 
         // MÓDULO 5: Liquidación (Pagar Deudas)
         findViewById<LinearLayout>(R.id.btnModuloLiquidar).setOnClickListener {
+            // Verificación
+            if (datos.isEmpty()) {
+                Toast.makeText(this, "No hay miembros en el grupo para liquidar.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
+
+            val intent = Intent(this, SettlementActivity::class.java)
+
+
+            intent.putExtra("ID", idGrupo)
+
+            startActivity(intent)
         }
     }
 

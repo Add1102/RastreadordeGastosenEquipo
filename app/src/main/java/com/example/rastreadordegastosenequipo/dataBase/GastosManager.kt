@@ -1,91 +1,122 @@
 package com.example.rastreadordegastosenequipo.dataBase
 
 import android.content.ContentValues
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 
 class GastosManager(private val db: SQLiteDatabase) {
 
-    // Obtener todos los gastos de un grupo
-    fun obtenerGastosDelGrupo(grupoId: Int): List<Gasto> {
-        val gastos = mutableListOf<Gasto>()
-        val cursor: Cursor = db.query(
-            "gastos",
-            null,
-            "id_grupo = ?",
-            arrayOf(grupoId.toString()),
-            null, null, "fecha DESC"
-        )
 
-        while (cursor.moveToNext()) {
-            val gasto = Gasto(
-                id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
-                descripcion = cursor.getString(cursor.getColumnIndexOrThrow("descripcion")),
-                monto = cursor.getDouble(cursor.getColumnIndexOrThrow("monto")),
-                fecha = cursor.getLong(cursor.getColumnIndexOrThrow("fecha")),
-                idPagador = cursor.getInt(cursor.getColumnIndexOrThrow("id_pagador")),
-                idGrupo = cursor.getInt(cursor.getColumnIndexOrThrow("id_grupo"))
-            )
-            gastos.add(gasto)
-        }
-        cursor.close()
-        return gastos
-    }
 
-    // Guardar un nuevo gasto
-    fun guardarGasto(gasto: Gasto): Long {
+    fun actualizarGasto(gasto: Gasto): Int {
         val values = ContentValues().apply {
             put("descripcion", gasto.descripcion)
             put("monto", gasto.monto)
-            put("fecha", gasto.fecha)
-            put("id_pagador", gasto.idPagador)
-            put("id_grupo", gasto.idGrupo)
+
         }
-        return db.insert("gastos", null, values)
+
+
+        return db.update("gastos", values, "id = ?", arrayOf(gasto.id.toString()))
     }
 
-    // --- AQUÍ ESTÁ LA CORRECCIÓN MÁGICA ---
-    fun actualizarGasto(gasto: Gasto): Int {
-        // 1. Actualizar la cabecera (Tabla gastos)
-        val values = ContentValues().apply {
-            put("descripcion", gasto.descripcion)
-            put("monto", gasto.monto) // El nuevo monto (ej. 300)
-            put("fecha", gasto.fecha)
-            put("id_pagador", gasto.idPagador)
-            put("id_grupo", gasto.idGrupo)
-        }
-        val filasAfectadas = db.update("gastos", values, "id = ?", arrayOf(gasto.id.toString()))
 
-        // 2. RECALCULAR LAS DEUDAS (Tabla gasto_detalle)
-        if (filasAfectadas > 0) {
-            // A. Contar cuántas personas dividen este gasto actualmente
-            val cursor = db.rawQuery("SELECT COUNT(*) FROM gasto_detalle WHERE id_gasto = ?", arrayOf(gasto.id.toString()))
-            var numDeudores = 0
-            if (cursor.moveToFirst()) {
-                numDeudores = cursor.getInt(0)
-            }
-            cursor.close()
-
-            // B. Si hay deudores, actualizamos el monto de cada uno
-            if (numDeudores > 0) {
-                val nuevoMontoIndividual = gasto.monto / numDeudores // Ej: 300 / 2 = 150
-
-                val valuesDetalle = ContentValues().apply {
-                    put("monto_deuda", nuevoMontoIndividual)
-                }
-                // Actualizamos TODAS las filas de detalle de este gasto con el nuevo monto
-                db.update("gasto_detalle", valuesDetalle, "id_gasto = ?", arrayOf(gasto.id.toString()))
-            }
-        }
-        return filasAfectadas
-    }
-
-    // --- TAMBIÉN CORREGIMOS ELIMINAR PARA EVITAR ERRORES FUTUROS ---
     fun eliminarGasto(gastoId: Int): Int {
-        // 1. Primero borramos los detalles (hijos)
-        db.delete("gasto_detalle", "id_gasto = ?", arrayOf(gastoId.toString()))
+        db.beginTransaction()
+        var rowsDeleted = 0
+        try {
 
-        // 2. Luego borramos el gasto (padre)
-        return db.delete("gastos", "id = ?", arrayOf(gastoId.toString()))
+            db.delete("gasto_detalle", "id_gasto = ?", arrayOf(gastoId.toString()))
+
+
+            rowsDeleted = db.delete("gastos", "id = ?", arrayOf(gastoId.toString()))
+
+            db.setTransactionSuccessful()
+        } catch (e: Exception) {
+            Log.e("GastosManager", "Error al eliminar gasto $gastoId: ${e.message}")
+        } finally {
+            db.endTransaction()
+        }
+        return rowsDeleted
+    }
+
+
+    fun obtenerGastosDelGrupo(groupId: Int): List<Gasto> {
+        val gastosList = mutableListOf<Gasto>()
+        val cursor = db.rawQuery("SELECT id, descripcion, monto, fecha, id_pagador, id_grupo FROM gastos WHERE id_grupo = ? ORDER BY fecha DESC", arrayOf(groupId.toString()))
+
+        while (cursor.moveToNext()) {
+            val gasto = Gasto(
+                id = cursor.getInt(0),
+                descripcion = cursor.getString(1),
+                monto = cursor.getDouble(2),
+                fecha = cursor.getLong(3),
+                idPagador = cursor.getInt(4),
+                idGrupo = cursor.getInt(5)
+            )
+            gastosList.add(gasto)
+        }
+        cursor.close()
+        return gastosList
+    }
+
+
+
+    fun getNetBalances(groupId: Int): Map<String, Double> {
+        val balances = mutableMapOf<String, Double>()
+        val cursorMiembros = db.rawQuery(
+            "SELECT id, nombre FROM miembros WHERE id_grupo = ?",
+            arrayOf(groupId.toString())
+        )
+
+        while (cursorMiembros.moveToNext()) {
+            val idMiembro = cursorMiembros.getInt(0)
+            val nombre = cursorMiembros.getString(1)
+
+            // Calcular Total Pagado : Suma de gastos donde él fue el pagador.
+            val queryPagado = "SELECT COALESCE(SUM(monto), 0.0) FROM gastos WHERE id_pagador = ? AND id_grupo = ?"
+            val totalPagado = obtenerSuma(db, queryPagado, arrayOf(idMiembro.toString(), groupId.toString()))
+
+            //  Calcular Total Consumido : Suma de deudas individuales en gasto_detalle.
+            val queryConsumido = "SELECT COALESCE(SUM(gd.monto_deuda), 0.0) FROM gasto_detalle gd JOIN gastos g ON gd.id_gasto = g.id WHERE gd.id_deudor = ? AND g.id_grupo = ?"
+            val totalConsumido = obtenerSuma(db, queryConsumido, arrayOf(idMiembro.toString(), groupId.toString()))
+
+            val saldoNeto = totalPagado - totalConsumido
+            balances[nombre] = saldoNeto
+        }
+
+        cursorMiembros.close()
+        return balances
+    }
+
+
+    fun resetGroupBalances(id: Int): Boolean {
+        db.beginTransaction()
+        return try {
+
+            db.execSQL("DELETE FROM gasto_detalle WHERE id_gasto IN (SELECT id FROM gastos WHERE id_grupo=?)", arrayOf(id.toString()))
+
+
+            db.delete("gastos", "id_grupo=?", arrayOf(id.toString()))
+
+
+            db.delete("pagos", "id_grupo=?", arrayOf(id.toString()))
+
+            db.setTransactionSuccessful()
+            true
+        } catch (e: Exception) {
+            Log.e("GastosManager", "Error al resetear saldos del grupo $id: ${e.message}")
+            false
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+
+    private fun obtenerSuma(db: SQLiteDatabase, query: String, args: Array<String>): Double {
+        var total = 0.0
+        val cursor = db.rawQuery(query, args)
+        if (cursor.moveToFirst()) total = cursor.getDouble(0)
+        cursor.close()
+        return total
     }
 }
